@@ -1,0 +1,1 @@
+# maven-quickvo-plugin
