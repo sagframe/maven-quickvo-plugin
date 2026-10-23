@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:tns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	targetNamespace="http://www.sagframe.com/schema/quickvo"
+	elementFormDefault="qualified">
+	<xsd:element name="quickvo">
+		<xsd:annotation>
+			<xsd:documentation><![CDATA[
+		quickvo configuration root element: generates entity (POJO) and vo (DTO) classes for sqltoy-orm from database table metadata.
+		Child element order is flexible; typical structure:
+		property* (parameters) → api-doc? (api-doc annotation templates) → datasource+ (datasources) → tasks (tasks)
+		→ primary-key? (primary key strategies) → business-primary-key? (business primary key) → cascade? (cascade)
+		→ extra-annotations? (extra annotations) → type-mapping? (type mapping)
+		Special characters in table/column remarks are handled automatically: newlines normalized to spaces,
+		double quotes/backslashes escaped, "*/" inside javadoc auto-guarded
+			]]></xsd:documentation>
+		</xsd:annotation>
+		<xsd:complexType>
+			<xsd:choice maxOccurs="unbounded">
+				<xsd:element name="property" maxOccurs="unbounded">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Custom parameter, three forms supported:
+	1) name+value: <property name="project.name" value="myProject"/>, referenced elsewhere via ${name}
+	2) name+content: <property name="key">value</property>
+	3) file:       <property file="src/main/resources/application.properties"/>, batch import from external properties/yml
+		Built-in parameters: project.version/project.name (generated file header comment), include.schema (whether @Entity carries schema, default false),
+		field.support.linked.set (whether setter returns this, default false),
+		generate.selectFields.class (whether to generate SelectFields inner class),
+	include.partition (whether to emit @Partition/@PartitionKey annotations, default true; set false when the target sqltoy version lacks these annotations),
+	include.mpp-table (whether to emit @MppTable engine metadata for ClickHouse/Doris/StarRocks, default true; set false for old sqltoy versions),
+	max.scale.length (scale truncation limit for type matching), skip.primary.constraint (skip pk constraint name extraction, mainly for postgresql)
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType mixed="true">
+						<xsd:attribute name="file" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[External parameter file path, supports .properties and .yml (yml keys joined by '.' per level)]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="name" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[Parameter name, referenced via ${name} placeholder]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="value" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[Parameter value, supports ##{globa.identity} global instance id placeholder]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+					</xsd:complexType>
+				</xsd:element>
+					<xsd:element name="api-doc" maxOccurs="1" minOccurs="0">
+						<xsd:annotation>
+							<xsd:documentation><![CDATA[
+		Custom api-doc annotation templates: used together with task's api-doc="custom" (mainstream swagger annotations are built in, custom is rarely needed).
+		Valid api-doc values on task: swagger-v3 (=openapi3/springdoc, io.swagger.v3...@Schema, requiredMode auto-added for non-null columns, DB default auto-added as example)
+		/swagger-v2 (springfox, io.swagger...ApiModel)/custom (use templates here)/none (no annotations, remarks emitted as javadoc, natively supports smart-doc).
+		Templates use freemarker syntax; class template variables: className,tableName,tableRemark;
+		field template variables: colName,colRemark,nullable,fieldType,fieldName,defaultValue
+							]]></xsd:documentation>
+						</xsd:annotation>
+					<xsd:complexType mixed="true">
+						<xsd:sequence>
+							<xsd:element name="imports" form="unqualified">
+								<xsd:annotation>
+									<xsd:documentation><![CDATA[Imports required by custom templates, semicolon separated, e.g.: io.swagger.v3.oas.annotations.media.Schema;org.other.Annotation]]></xsd:documentation>
+								</xsd:annotation>
+								<xsd:complexType>
+									<xsd:attribute name="value" type="xsd:string" />
+								</xsd:complexType>
+							</xsd:element>
+							<xsd:element name="doc-class-template" form="unqualified">
+								<xsd:annotation>
+									<xsd:documentation><![CDATA[Class-level annotation template, e.g.: @Schema(name="${className}",description="${tableRemark}")]]></xsd:documentation>
+								</xsd:annotation>
+							</xsd:element>
+							<xsd:element name="doc-field-template" form="unqualified">
+								<xsd:annotation>
+									<xsd:documentation><![CDATA[Field-level annotation template, e.g.: @Schema(name="${fieldName}",description="${colRemark}",nullable=${nullable})]]></xsd:documentation>
+								</xsd:annotation>
+							</xsd:element>
+						</xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>
+				<xsd:element name="datasource" minOccurs="1" maxOccurs="unbounded">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Database connection definition; tasks reference it by name via the datasource attribute.
+	schema/catalog cheat sheet (internally: conn.getMetaData().getTables(catalog,schema,tableNamePattern,TABLE)):
+	* mysql/mariadb/tidb/doris/starrocks: catalog=database name (lowercase), do not set schema
+	* oracle/DM (Dameng): schema=username (usually UPPERCASE, e.g. SYSTEM/SYSDBA), do not set catalog
+	* postgresql/openGauss/gaussdb/vastbase/kingbase: schema=schema name (usually lowercase, e.g. public), catalog normally not set
+	* sqlserver: catalog=database name, schema=schema name (default dbo)
+	* db2: schema=username (UPPERCASE), catalog=database name
+	* For single-user single-database setups neither schema nor catalog is needed; wrong values cause no tables matched or duplicate columns,
+	  and when no table matches, the log lists available catalogs/schemas of the current database to help troubleshooting
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:attribute name="name" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[Datasource name referenced by task's datasource attribute; may be omitted on task when only one datasource is defined]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="url" type="xsd:string" use="required">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[JDBC url, e.g. jdbc:mysql://localhost:3306/mydb, supports ${} placeholders]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="driver" type="xsd:string" use="required">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[JDBC driver class name, e.g. com.mysql.cj.jdbc.Driver; declare the driver jar in the plugin's <dependencies>]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="username" type="xsd:string" use="required" />
+						<xsd:attribute name="password" type="xsd:string" use="required" />
+						<xsd:attribute name="catalog" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[Catalog: mysql family=database name; sqlserver=database name; db2=database name; not needed for oracle/postgresql family]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="schema" type="xsd:string">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[Schema: oracle/dm=username (UPPERCASE); postgresql family=schema name (lowercase); sqlserver=dbo; not needed for mysql family]]></xsd:documentation>
+							</xsd:annotation>
+						</xsd:attribute>
+					</xsd:complexType>
+				</xsd:element>
+				<xsd:element name="tasks" form="qualified" maxOccurs="1">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[Task collection: each task selects a set of tables via the include regex, with its own packages/generation style/datasource; tables may overlap across tasks]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:sequence maxOccurs="unbounded">
+							<xsd:element name="task" maxOccurs="unbounded">
+								<xsd:annotation>
+									<xsd:documentation><![CDATA[
+		A single generation task. Skipped when active=false; the same table set can be generated in multiple tasks with different styles (e.g. one task for strict-layered entity+vo, another for a lombok version).
+		Note: include is a regex with "contains" semantics; ^XXX means prefix match, ^\w+$ means exact match
+								]]></xsd:documentation>
+							</xsd:annotation>
+								<xsd:complexType>
+									<xsd:choice maxOccurs="unbounded">
+										<xsd:element name="vo" minOccurs="0" maxOccurs="1">
+											<xsd:annotation>
+												<xsd:documentation><![CDATA[
+		VO/DTO layer configuration: together with entity it enables strict layering (vo as dto); alone it generates in entity style (legacy compatible mode).
+		has-abstract defaults to false; lombok="true" lets lombok generate get/set, lombok-chain makes setters return this; both automatically disable the abstract class
+												]]></xsd:documentation>
+											</xsd:annotation>
+											<xsd:complexType>
+												<xsd:attribute name="package" type="xsd:string" use="required">
+													<xsd:annotation><xsd:documentation><![CDATA[Java package name of the vo]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="has-abstract" type="xsd:boolean" default="false">
+													<xsd:annotation><xsd:documentation><![CDATA[Whether to generate an Abstract class, default false; the parent file is created only once and manual code is never overwritten on re-runs]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="substr" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Table name prefix stripped from the class name, e.g. SAG_ removes Sag; used with name="#{subName}"]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="name" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Class name template, #{subName} is the camel-case name after prefix removal, e.g. #{subName}VO → StaffInfoVO]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="lombok" type="xsd:boolean">
+													<xsd:annotation><xsd:documentation><![CDATA[Use lombok @Data instead of generated get/set]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="lombok-chain" type="xsd:boolean">
+													<xsd:annotation><xsd:documentation><![CDATA[@Accessors(chain=true) chained setters, implies lombok=true]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="extends" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Fully qualified parent class name; generated class extends it]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="skip-extends-fields" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Common fields already defined in the parent class, skipped during generation, comma separated, e.g.: createBy,createTime]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="to-dir" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Output directory, absolute or relative to the execution root; defaults to tasks' dist]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+											</xsd:complexType>
+										</xsd:element>
+										<xsd:element name="entity" minOccurs="0" maxOccurs="1">
+											<xsd:annotation>
+												<xsd:documentation><![CDATA[
+		entity (POJO) layer configuration. has-abstract defaults to true: the abstract class holds all columns exactly as in the table (fully regenerated),
+		while the non-abstract parent is left for developers to extend (only the constructor auto-region is updated); lombok mode generates a single fully regenerated file
+												]]></xsd:documentation>
+											</xsd:annotation>
+											<xsd:complexType>
+												<xsd:attribute name="package" type="xsd:string" use="required">
+													<xsd:annotation><xsd:documentation><![CDATA[Java package name of the entity]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="name" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Class name template, #{subName} is the camel-case name after prefix removal]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="has-abstract" type="xsd:boolean" default="true">
+													<xsd:annotation><xsd:documentation><![CDATA[Whether to split into abstract class + parent class files, default true]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="lombok" type="xsd:boolean">
+													<xsd:annotation><xsd:documentation><![CDATA[Use lombok @Data instead of generated get/set, disables the abstract class split]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="lombok-chain" type="xsd:boolean">
+													<xsd:annotation><xsd:documentation><![CDATA[@Accessors(chain=true) chained setters, implies lombok=true]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="substr" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Table name prefix stripped from the class name]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="extends" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Fully qualified parent class name]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="skip-extends-fields" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Common fields already defined in the parent class, skipped during generation, comma separated]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+												<xsd:attribute name="to-dir" type="xsd:string">
+													<xsd:annotation><xsd:documentation><![CDATA[Output directory, absolute or relative to the execution root]]></xsd:documentation></xsd:annotation>
+												</xsd:attribute>
+											</xsd:complexType>
+										</xsd:element>
+									</xsd:choice>
+									<xsd:attribute name="datasource" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Referenced datasource name]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="active" type="xsd:boolean" default="true">
+										<xsd:annotation><xsd:documentation><![CDATA[Whether the task is active]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="swagger-model">
+										<xsd:annotation><xsd:documentation><![CDATA[Legacy api-doc switch (v3/v2/false), prefer the api-doc attribute]]></xsd:documentation></xsd:annotation>
+										<xsd:simpleType>
+											<xsd:restriction base="xsd:string">
+												<xsd:enumeration value="v3" />
+												<xsd:enumeration value="v2" />
+												<xsd:enumeration value="false" />
+											</xsd:restriction>
+										</xsd:simpleType>
+									</xsd:attribute>
+									<xsd:attribute name="api-doc">
+										<xsd:annotation><xsd:documentation><![CDATA[Api-doc annotations: swagger-v3 (aliases openapi3/openapi/springdoc/v3)/swagger-v2 (aliases springfox/v2)/custom (templates from the api-doc element)/none (default, remarks emitted as javadoc)]]></xsd:documentation></xsd:annotation>
+										<xsd:simpleType>
+											<xsd:restriction base="xsd:string">
+												<xsd:enumeration value="swagger-v3" />
+<xsd:enumeration value="v3" />
+<xsd:enumeration value="openapi3" />
+<xsd:enumeration value="openapi-3" />
+<xsd:enumeration value="openapi" />
+<xsd:enumeration value="springdoc" />
+												<xsd:enumeration value="swagger-v2" />
+<xsd:enumeration value="v2" />
+<xsd:enumeration value="springfox" />
+												<xsd:enumeration value="custom" />
+												<xsd:enumeration value="none" />
+											</xsd:restriction>
+										</xsd:simpleType>
+									</xsd:attribute>
+									<xsd:attribute name="author" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Author, written into the generated file header comment]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="include" type="xsd:string" use="required">
+										<xsd:annotation><xsd:documentation><![CDATA[Table name match regex (case-insensitive, contains semantics); ^SAG_\w+ matches tables starting with SAG_; * matches all]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="exclude" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Excluded table name regex, takes precedence over include]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="fields-rid-prefix" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Common prefix stripped from column names, e.g. with prefix A_ column A_STAFF_ID becomes staffId]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:sequence>
+						<xsd:attribute name="include-partition" type="xsd:boolean">
+							<xsd:annotation><xsd:documentation><![CDATA[Whether to emit @Partition/@PartitionKey annotations for partitioned tables (default true); set false when the target sqltoy version lacks these annotations. Preferred over the property form.]]></xsd:documentation></xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="include-mpp-table" type="xsd:boolean">
+							<xsd:annotation><xsd:documentation><![CDATA[Whether to emit @MppTable engine metadata for ClickHouse/Doris/StarRocks (default true); set false for old sqltoy versions. Preferred over the property form.]]></xsd:documentation></xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="fail-on-empty" type="xsd:boolean" default="true">
+							<xsd:annotation><xsd:documentation><![CDATA[Whether a task whose include regex matches no tables should fail the build (default true, new in 2.0.4), preventing silent zero-output builds; set false when an empty task is expected. Preferred over the property form.]]></xsd:documentation></xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="log-language">
+							<xsd:annotation>
+								<xsd:documentation><![CDATA[
+	Log output language (new in 2.0): zh=Chinese, en=English, auto=follow system Locale (default).
+	Affects every log line of the generation run
+								]]></xsd:documentation>
+							</xsd:annotation>
+							<xsd:simpleType>
+								<xsd:restriction base="xsd:string">
+									<xsd:enumeration value="zh" />
+									<xsd:enumeration value="en" />
+									<xsd:enumeration value="auto" />
+								</xsd:restriction>
+							</xsd:simpleType>
+						</xsd:attribute>
+						<xsd:attribute name="dist" type="xsd:string">
+							<xsd:annotation><xsd:documentation><![CDATA[Default output root directory, relative paths are based on the execution root; used when entity/vo to-dir is not set]]></xsd:documentation></xsd:annotation>
+						</xsd:attribute>
+						<xsd:attribute name="abstractPath" type="xsd:string">
+											<xsd:annotation><xsd:documentation><![CDATA[Sub-directory for abstract classes (default base), e.g. base]]></xsd:documentation></xsd:annotation>
+										</xsd:attribute>
+										<xsd:attribute name="abstract-path" type="xsd:string">
+											<xsd:annotation><xsd:documentation><![CDATA[Alias of abstractPath (kebab-case)]]></xsd:documentation></xsd:annotation>
+										</xsd:attribute>
+										<xsd:attribute name="encoding" type="xsd:string" default="UTF-8">
+							<xsd:annotation><xsd:documentation><![CDATA[Encoding of generated files, default UTF-8]]></xsd:documentation></xsd:annotation>
+						</xsd:attribute>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- primary key generation strategies -->
+				<xsd:element name="primary-key" maxOccurs="1">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Primary key strategy configuration (optional); when absent it is auto-derived from database characteristics —
+	1) database auto-increment column (identity/auto_increment/sequence default nextval) → identity strategy (database first);
+	2) single-column primary key derived from type and precision: character or numeric with precision >=19 uses snowflake (63-bit long, currently 19 decimal digits), >=22 uses default (22-digit),
+	   >=26 uses nanotime (26-digit nanos); below 19 digits the application assigns values;
+	3) composite primary keys are not auto-derived, configure assign or generator explicitly.
+	When strategy is configured without force=true, database auto-increment columns still take identity precedence
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:sequence minOccurs="0" maxOccurs="unbounded">
+							<xsd:element name="table" minOccurs="0" maxOccurs="unbounded">
+								<xsd:complexType>
+									<xsd:attribute name="name" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Table name regex (full match, case-insensitive); when multiple entries match, the last one wins, e.g. SAG_\w+|SYS_\w+]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="strategy">
+										<xsd:annotation><xsd:documentation><![CDATA[
+	identity: database auto-increment; sequence: database sequence (sequence required);
+	assign: application assigned; generator: specific generator (generator required)
+																		]]></xsd:documentation></xsd:annotation>
+										<xsd:simpleType>
+											<xsd:restriction base="xsd:string">
+												<xsd:enumeration value="generator" />
+												<xsd:enumeration value="assign" />
+												<xsd:enumeration value="sequence" />
+												<xsd:enumeration value="identity" />
+											</xsd:restriction>
+										</xsd:simpleType>
+									</xsd:attribute>
+									<xsd:attribute name="generator">
+										<xsd:annotation><xsd:documentation><![CDATA[
+	Concrete generator for the generator strategy:
+	default=22-digit time-ordered id; uuid; ulid=time-sortable id (requires com.github.f4b6a3:ulid-creator);
+	snowflake=snowflake (63-bit long, 18~19 decimal digits); nanotime=26-digit nanos; redis=redis-based sequence
+																		]]></xsd:documentation></xsd:annotation>
+										<xsd:simpleType>
+											<xsd:restriction base="xsd:string">
+												<xsd:enumeration value="default" />
+												<xsd:enumeration value="UUID" />
+												<xsd:enumeration value="ULID" />
+												<xsd:enumeration value="snowflake" />
+												<xsd:enumeration value="nanotime" />
+												<xsd:enumeration value="redis" />
+											</xsd:restriction>
+										</xsd:simpleType>
+									</xsd:attribute>
+									<xsd:attribute name="sequence" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Sequence name for the sequence strategy, supports ${tableName} placeholder, e.g. SEQ_${tableName}]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="force" type="xsd:boolean">
+										<xsd:annotation><xsd:documentation><![CDATA[Whether the configured strategy overrides database auto-increment (default false, i.e. database identity wins)]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- data version (optimistic lock field) -->
+				<xsd:element name="data-version" maxOccurs="1">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Optimistic-lock version field: declare the version column per table, emits field-level @DataVersion on the entity
+	(VO/DTO are not affected); sqltoy controls update concurrency by comparing record versions.
+	name: pure name (letters/digits/underscore/dash) matches the table name exactly ignoring case;
+	      values containing regex metacharacters are treated as a full-match regex, last match wins.
+	column: version column, case-insensitive, ignores _/- differences.
+	start-date: optional boolean (default false) for yyyyMMdd+sequence style versions, emits @DataVersion(startDate=true).
+	Mutually exclusive with extra-annotations on the same field (using both duplicates the annotation).
+	A warning is logged when the declared column does not exist in the table.
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:choice maxOccurs="unbounded" minOccurs="0">
+							<xsd:element name="table">
+								<xsd:complexType>
+									<xsd:attribute name="name" use="required" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Table name (exact, case-insensitive) or full-match regex]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="column" use="required" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Version column name, case-insensitive, ignores _/- differences]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="start-date" type="xsd:boolean">
+										<xsd:annotation><xsd:documentation><![CDATA[Version format is yyyyMMdd+sequence, emits startDate=true]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:choice>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- business primary key -->
+				<xsd:element name="business-primary-key" maxOccurs="1">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Business primary key: a code composed per business rules (can replace the pk strategy), e.g. 1-digit channel_2-digit type_6-digit date_3-digit sequence.
+	signature supports three macros: @substr(${field},start,length) substring,
+	@case(value,case1,value1,case2,value2,other) conditional mapping, @df(yyMMdd) date formatting;
+	the sequence part auto-widens when it overflows within the day; generator=redis requires a redis sequence service
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:choice maxOccurs="unbounded" minOccurs="0">
+							<xsd:element name="table">
+								<xsd:complexType>
+									<xsd:attribute name="name" use="required" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Table name]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="column" use="required" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Business primary key column name]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="length" type="xsd:int">
+										<xsd:annotation><xsd:documentation><![CDATA[Total length of the business primary key (sequence part auto-widens)]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="sequence-size" type="xsd:int">
+										<xsd:annotation><xsd:documentation><![CDATA[Number of digits of the sequence part]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="signature" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Signature composition, e.g. ${channel}@df(yyMMdd)@case(${type},PC,PC,NET,NT,OT)]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="related-column" type="xsd:string">
+																<xsd:annotation><xsd:documentation><![CDATA[Legacy singular alias of related-columns]]></xsd:documentation></xsd:annotation>
+															</xsd:attribute>
+															<xsd:attribute name="related-columns" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Related columns participating in the signature, comma separated]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="start" type="xsd:long">
+																<xsd:annotation><xsd:documentation><![CDATA[Starting value of the sequence part (default 1)]]></xsd:documentation></xsd:annotation>
+															</xsd:attribute>
+															<xsd:attribute name="generator" use="required" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Generator: redis, snowflake or @bean(beanName) for a custom spring bean]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:choice>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- parent-child cascade configuration -->
+				<xsd:element name="cascade" maxOccurs="1">
+					<xsd:annotation>
+					<xsd:documentation><![CDATA[
+	Parent-child cascade: @OneToMany relations are generated automatically when a primary key is referenced by other tables' foreign keys.
+	Normally no configuration is needed (the fk constraint alone triggers generation); delete=true is derived from the fk's
+	ON DELETE rule and emitted only when the constraint declares ON DELETE CASCADE (mirroring database behavior, consistent across drivers).
+	Table entries here refine child-table behavior:
+	update-cascade=delete (cascade delete existing rows) or an SQL fragment (e.g. ENABLED=0 to invalidate),
+	load=extra condition for cascade loading (e.g. STATUS=1), orderBy=sort order for cascade loading.
+	Note: configure on the parent side only; child tables are matched by table name; tables without fk constraints produce no cascade
+							]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:sequence minOccurs="0" maxOccurs="unbounded">
+							<xsd:element name="table" minOccurs="0" maxOccurs="unbounded">
+								<xsd:complexType>
+									<xsd:attribute name="name" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Child table name]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="delete" type="xsd:boolean">
+										<xsd:annotation><xsd:documentation><![CDATA[Cascade-delete child rows when the parent is deleted (emits delete=true on @OneToMany). When omitted, the foreign key's ON DELETE action decides (only ON DELETE CASCADE emits delete=true); set true/false to override the FK explicitly.]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="update-cascade" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[How existing child rows are handled on parent update: delete or an SQL fragment (e.g. ENABLED=0)]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="load" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Extra condition for cascade loading, e.g. STATUS=1]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="not-null-field" type="xsd:string">
+																<xsd:annotation><xsd:documentation><![CDATA[Field used to tell whether joined child rows exist (emits notNullField on @OneToMany)]]></xsd:documentation></xsd:annotation>
+															</xsd:attribute>
+															<xsd:attribute name="orderBy" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Sort order for cascade loading, e.g. createTime desc]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- extra annotations -->
+				<xsd:element name="extra-annotations" maxOccurs="1" minOccurs="0">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Extra annotations (new in 2.0): attach annotations to matching tables that cannot be derived from the table schema
+	(e.g. @Sharding for sharding, @DataVersion optimistic lock, masking @Secure),
+	emitted stably on every regeneration; solves the problem of hand-added annotations on generated classes being overwritten by the next run.
+	name is a table name regex (full match, case-insensitive); class-annotation lines are emitted on the class;
+	field-annotation's column is the column name (case-insensitive, ignores _/- differences) emitted on the field;
+	imports lists the imports needed by these annotations (comma or semicolon separated, fully qualified names)
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:sequence minOccurs="0" maxOccurs="unbounded">
+							<xsd:element name="table" minOccurs="0" maxOccurs="unbounded">
+								<xsd:complexType mixed="true">
+									<xsd:choice minOccurs="0" maxOccurs="unbounded">
+										<xsd:element name="class-annotation">
+											<xsd:annotation><xsd:documentation><![CDATA[Class-level annotation literal, e.g.: @org.sagacity.sqltoy.config.annotation.Sharding(fields="orderId")]]></xsd:documentation></xsd:annotation>
+											<xsd:complexType mixed="true" />
+										</xsd:element>
+										<xsd:element name="field-annotation">
+											<xsd:annotation><xsd:documentation><![CDATA[Field-level annotation literal, column names the target column]]></xsd:documentation></xsd:annotation>
+											<xsd:complexType mixed="true">
+												<xsd:attribute name="column" type="xsd:string" use="required" />
+											</xsd:complexType>
+										</xsd:element>
+										<xsd:element name="imports">
+											<xsd:annotation><xsd:documentation><![CDATA[Imports needed by the annotations, comma/semicolon separated]]></xsd:documentation></xsd:annotation>
+											<xsd:complexType mixed="true">
+												<xsd:attribute name="value" type="xsd:string" />
+											</xsd:complexType>
+										</xsd:element>
+									</xsd:choice>
+									<xsd:attribute name="name" type="xsd:string" use="required" />
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>
+				<!-- ORM type conversion mapping -->
+				<xsd:element name="type-mapping" maxOccurs="1">
+					<xsd:annotation>
+						<xsd:documentation><![CDATA[
+	Custom type mapping (optional): appended to the default mappings, later entries win; matched by precision/scale ranges.
+	native-types=raw type names returned by the database (case-insensitive, comma separated);
+	jdbc-type=mapped standard JDBC type (written to @Column type, e.g. INTEGER/BIGINT/DECIMAL/VARCHAR/TIMESTAMP/VECTOR);
+	java-type=property java type (fully qualified unless in java.lang; common types like BigDecimal/LocalDateTime may be short-written);
+	precision/scale=range (format min..max or a single value), unlimited when absent; table-field restricts to a specific table.column;
+	import-types=extra types to import (comma separated).
+	Vector types (vector/floatvector) map by default to jdbc-type=VECTOR and java-type=Float[]; override as below for String,
+	float[] or List<Float>. JSON/JSONB map to String by default, no jdbc-type needed
+						]]></xsd:documentation>
+					</xsd:annotation>
+					<xsd:complexType>
+						<xsd:sequence maxOccurs="unbounded">
+							<xsd:element name="sql-type" maxOccurs="unbounded" minOccurs="0">
+								<xsd:complexType>
+									<xsd:attribute name="table-field" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Restricts to a specific table and column (lowercase), format: table.column, e.g. staff_info.teamList]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="native-types" type="xsd:string" use="required">
+										<xsd:annotation><xsd:documentation><![CDATA[Raw type names, comma separated, e.g. NUMBER,DECIMAL,NUMERIC]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="precision" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Precision range: 1..8 means 1 to 8, a single value like 8 means equal to 8, unlimited when absent]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="scale" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Scale range: 0 means no decimal digits, unlimited when absent]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="jdbc-type" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Standard JDBC type name (java.sql.Types), written to @Column's type attribute]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="java-type" type="xsd:string" use="required">
+										<xsd:annotation><xsd:documentation><![CDATA[Property java type; mind xml escaping for generics: List&lt;StaffInfoVO&gt;; common types like BigDecimal/BigInteger/LocalDate may be short-written]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+									<xsd:attribute name="import-types" type="xsd:string">
+										<xsd:annotation><xsd:documentation><![CDATA[Fully qualified types to import additionally, comma separated, e.g. com.x.vo.StaffInfoVO,java.util.List]]></xsd:documentation></xsd:annotation>
+									</xsd:attribute>
+								</xsd:complexType>
+							</xsd:element>
+						</xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>
+			</xsd:choice>
+		</xsd:complexType>
+	</xsd:element>
+</xsd:schema>

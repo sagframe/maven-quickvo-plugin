@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo">
+<property name="project.version" value="1.0.0"/>
+<property name="project.name" value="full-verify"/>
+<datasource name="demo" driver="org.sqlite.JDBC" url="jdbc:sqlite:target/full-verify-sqlite.db" username="" password=""/>
+<tasks dist="target/golden/gen/full-sqlite" encoding="UTF-8">
+	<task active="true" author="verify" include="^QS_\w+" datasource="demo">
+		<entity package="com.fv.sqlite.entity" substr="Qs" name="#{subName}"/>
+	</task>
+</tasks>
+<primary-key><table name="QS_STAFF" strategy="generator" generator="default"/></primary-key>
+<cascade><table name="QS_LOG" update-cascade="delete" load="STATUS='A'"/></cascade>
+</quickvo>

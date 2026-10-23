@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sagframe.com/schema/quickvo https://sagframe.github.io/schema/quickvo.xsd">
+	<!-- oracle方言实测配置(FREEPDB1,SYSTEM用户) -->
+	<property name="project.version" value="1.0.0" />
+	<property name="project.name" value="quickvo-verify" />
+	<datasource name="demo" driver="oracle.jdbc.OracleDriver"
+		url="jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+		schema="SYSTEM" username="system" password="Sqltoy@2026" />
+	<tasks dist="target/golden/gen/oracle" encoding="UTF-8">
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_\w+" datasource="demo" api-doc="swagger-v3">
+			<entity package="com.quickvo.demo.oracle.entity" substr="QuickvoDemo" name="#{subName}" />
+			<vo package="com.quickvo.demo.oracle.vo" substr="QuickvoDemo" name="#{subName}VO" />
+		</task>
+	</tasks>
+	<primary-key>
+		<table name="QUICKVO_DEMO_STAFF" strategy="generator" generator="default" />
+		<table name="QUICKVO_DEMO_STAFF_LOG" strategy="generator" generator="snowflake" />
+	</primary-key>
+	<cascade>
+		<table name="QUICKVO_DEMO_STAFF_LOG" update-cascade="delete" load="STATUS=1" />
+	</cascade>
+</quickvo>

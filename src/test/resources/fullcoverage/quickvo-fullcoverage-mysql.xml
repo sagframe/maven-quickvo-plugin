@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sagframe.com/schema/quickvo https://sagframe.github.io/schema/quickvo.xsd">
+	<!-- 全类型/全功能覆盖验证配置(mysql):主键策略全覆盖/extra-annotations/custom api-doc/类型匹配/级联 -->
+	<property name="project.version" value="1.0.0" />
+	<property name="project.name" value="quickvo-fullcoverage" />
+	<datasource name="demo" driver="com.mysql.cj.jdbc.Driver"
+		url="jdbc:mysql://localhost:3307/quickvo_demo?useUnicode=true&amp;characterEncoding=utf8&amp;useSSL=false&amp;serverTimezone=Asia/Shanghai&amp;allowPublicKeyRetrieval=true"
+		catalog="quickvo_demo" username="root" password="Sqltoy@2026" />
+	<tasks dist="target/golden/gen/fullmysql" encoding="UTF-8">
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_\w+" datasource="demo" api-doc="swagger-v3">
+			<entity package="com.quickvo.full.mysql.entity" substr="QuickvoDemo" name="#{subName}" />
+			<vo package="com.quickvo.full.mysql.vo" substr="QuickvoDemo" name="#{subName}VO" />
+		</task>
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_STAFF_LOG$" datasource="demo" api-doc="custom">
+			<entity package="com.quickvo.full.mysql.doc.entity" substr="QuickvoDemo" name="#{subName}"
+				lombok="true" lombok-chain="true" has-abstract="false" />
+		</task>
+	</tasks>
+	<api-doc>
+		<imports value="io.swagger.v3.oas.annotations.media.Schema" />
+		<doc-class-template>
+		<![CDATA[@Schema(name="${className}",description="${tableRemark}",tableName="${tableName}")]]>
+		</doc-class-template>
+		<doc-field-template>
+		<![CDATA[@Schema(name="${fieldName}",description="${colRemark}",nullable=${nullable}<#if (defaultValue?exists && defaultValue!='')>,defaultValue="${defaultValue}"</#if>)]]>
+		</doc-field-template>
+	</api-doc>
+	<primary-key>
+		<table name="QUICKVO_DEMO_STAFF" strategy="generator" generator="default" />
+		<table name="QUICKVO_DEMO_STAFF_LOG" strategy="generator" generator="ulid" />
+		<table name="QUICKVO_DEMO_TRADE" strategy="generator" generator="nanotime" />
+		<table name="QUICKVO_DEMO_ORDER" strategy="assign" />
+	</primary-key>
+	<!-- 手工注解融合:重新生成稳定输出,不再被覆盖 -->
+	<extra-annotations>
+		<table name="QUICKVO_DEMO_STAFF">
+			<class-annotation>
+			<![CDATA[@org.sagacity.sqltoy.config.annotation.Sharding(fields="staffId")]]>
+			</class-annotation>
+			<field-annotation column="STATUS">
+			<![CDATA[@org.sagacity.sqltoy.config.annotation.DataVersion]]>
+			</field-annotation>
+			<field-annotation column="STAFF_NAME">
+			<![CDATA[@com.quickvo.full.secure.Secure(level=3)]]>
+			</field-annotation>
+			<imports value="org.sagacity.sqltoy.config.annotation.Sharding,org.sagacity.sqltoy.config.annotation.DataVersion,com.quickvo.full.secure.Secure" />
+		</table>
+	</extra-annotations>
+	<cascade>
+		<table name="QUICKVO_DEMO_STAFF_LOG" update-cascade="delete" delete="true" load="STATUS=1" />
+	</cascade>
+	<type-mapping>
+		<sql-type native-types="NUMBER,DECIMAL,NUMERIC" precision="1..8" scale="0" jdbc-type="INTEGER" java-type="Integer" />
+		<sql-type native-types="BIGINT" jdbc-type="BIGINT" java-type="java.math.BigInteger" />
+		<!-- 指定表字段映射:json→泛型List -->
+		<sql-type table-field="quickvo_demo_type_matrix.col_json" native-types="json" java-type="List&lt;String&gt;" import-types="java.util.List" />
+	</type-mapping>
+</quickvo>

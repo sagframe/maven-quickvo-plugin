@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sagframe.com/schema/quickvo https://sagframe.github.io/schema/quickvo.xsd">
+	<!-- golden基线测试配置(mysql9容器,3307端口),生成结果需与expected目录字节级一致 -->
+	<property name="project.version" value="1.0.0" />
+	<property name="project.name" value="quickvo-golden" />
+	<datasource name="demo" driver="com.mysql.cj.jdbc.Driver"
+		url="jdbc:mysql://localhost:3307/quickvo_demo?useUnicode=true&amp;characterEncoding=utf8&amp;useSSL=false&amp;serverTimezone=Asia/Shanghai&amp;allowPublicKeyRetrieval=true"
+		catalog="quickvo_demo" username="root" password="Sqltoy@2026" />
+	<tasks dist="target/golden/gen/mysql" encoding="UTF-8">
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_\w+" datasource="demo" api-doc="swagger-v3">
+			<entity package="com.quickvo.demo.mysql.entity" substr="QuickvoDemo" name="#{subName}" />
+			<vo package="com.quickvo.demo.mysql.vo" substr="QuickvoDemo" name="#{subName}VO" />
+		</task>
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_STAFF_LOG$" datasource="demo">
+			<entity package="com.quickvo.demo.mysql.log.entity" substr="QuickvoDemo" name="#{subName}"
+				lombok="true" lombok-chain="true" has-abstract="false" />
+		</task>
+	</tasks>
+	<primary-key>
+		<table name="QUICKVO_DEMO_STAFF" strategy="generator" generator="default" />
+		<table name="QUICKVO_DEMO_STAFF_LOG" strategy="generator" generator="snowflake" />
+	</primary-key>
+	<cascade>
+		<table name="QUICKVO_DEMO_STAFF_LOG" update-cascade="delete" delete="true" load="STATUS=1" />
+	</cascade>
+	<type-mapping>
+		<sql-type native-types="NUMBER,DECIMAL,NUMERIC" precision="1..8" scale="0" jdbc-type="INTEGER" java-type="Integer" />
+	</type-mapping>
+</quickvo>

@@ -1,0 +1,13 @@
+-- starrocks(主键模型)
+CREATE DATABASE IF NOT EXISTS quickvo_demo;
+USE quickvo_demo;
+DROP TABLE IF EXISTS QUICKVO_DEMO_STAFF;
+CREATE TABLE QUICKVO_DEMO_STAFF (
+  STAFF_ID varchar(32) NOT NULL COMMENT '员工ID',
+  STAFF_CODE varchar(20) NOT NULL COMMENT '员工工号',
+  STAFF_NAME varchar(60) NOT NULL COMMENT '员工姓名',
+  SEX tinyint COMMENT '性别:1男;2女',
+  BIRTHDAY date COMMENT '生日',
+  ENTRY_DATE datetime COMMENT '入职时间',
+  SALARY decimal(10,2) COMMENT '薪资'
+) PRIMARY KEY (STAFF_ID) COMMENT '员工信息表' DISTRIBUTED BY HASH (STAFF_ID) PROPERTIES ('replication_num' = '1')

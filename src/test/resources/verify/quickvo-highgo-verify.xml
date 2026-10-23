@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sagframe.com/schema/quickvo https://sagframe.github.io/schema/quickvo.xsd">
+	<!-- highgo(瀚高,PG12内核)验证配置:官方驱动jdbc:highgo://,容器sqltoy-highgo宿主5867 -->
+	<property name="project.version" value="1.0.0" />
+	<property name="project.name" value="quickvo-verify" />
+	<datasource name="demo" driver="com.highgo.jdbc.Driver" url="jdbc:highgo://localhost:5867/highgo"
+		username="highgo" password="Sqltoy@2026" schema="quickvo_demo" />
+	<tasks dist="target/golden/gen/highgo" encoding="UTF-8">
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_\w+" datasource="demo">
+			<entity package="com.quickvo.demo.highgo.entity" substr="QuickvoDemo" name="#{subName}" />
+		</task>
+	</tasks>
+	<primary-key>
+		<table name="QUICKVO_DEMO_STAFF" strategy="generator" generator="default" />
+	</primary-key>
+</quickvo>

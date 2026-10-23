@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo">
+<property name="project.version" value="1.0.0"/>
+<property name="project.name" value="full-verify"/>
+<datasource name="demo" driver="com.mysql.cj.jdbc.Driver"
+	url="jdbc:mysql://localhost:3307/quickvo_demo?useUnicode=true&amp;characterEncoding=utf8&amp;useSSL=false&amp;serverTimezone=Asia/Shanghai&amp;allowPublicKeyRetrieval=true"
+	catalog="quickvo_demo" username="root" password="Sqltoy@2026"/>
+<tasks dist="target/golden/gen/full-mysql" encoding="UTF-8">
+	<task active="true" author="verify" include="^QS_\w+" datasource="demo" api-doc="swagger-v3">
+		<entity package="com.fv.mysql.entity" substr="Qs" name="#{subName}"/>
+		<vo package="com.fv.mysql.vo" substr="Qs" name="#{subName}VO"/>
+	</task>
+</tasks>
+<primary-key>
+	<table name="QS_STAFF" strategy="generator" generator="default"/>
+	<table name="QS_TRADE" strategy="generator" generator="nanotime"/>
+</primary-key>
+<cascade>
+	<table name="QS_LOG" update-cascade="delete" load="STATUS='A'"/>
+</cascade>
+</quickvo>

@@ -1,0 +1,4 @@
+/target/
+/quickvo.log
+__pycache__/
+*.pyc

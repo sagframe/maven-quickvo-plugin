@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quickvo xmlns="http://www.sagframe.com/schema/quickvo"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sagframe.com/schema/quickvo https://sagframe.github.io/schema/quickvo.xsd">
+	<!-- 全类型/全功能覆盖验证配置(postgresql):json/jsonb/vector/生成列/序列主键/分区表/swagger-v2 -->
+	<property name="project.version" value="1.0.0" />
+	<property name="project.name" value="quickvo-fullcoverage" />
+	<datasource name="demo" driver="org.postgresql.Driver"
+		url="jdbc:postgresql://localhost:5433/postgres"
+		schema="quickvo_demo" username="postgres" password="Sqltoy@2026" />
+	<tasks dist="target/golden/gen/fullpg" encoding="UTF-8">
+		<task active="true" author="quickvo-test" include="^QUICKVO_DEMO_\w+" datasource="demo" api-doc="swagger-v2">
+			<entity package="com.quickvo.full.pg.entity" substr="QuickvoDemo" name="#{subName}" />
+			<vo package="com.quickvo.full.pg.vo" substr="QuickvoDemo" name="#{subName}VO" />
+		</task>
+	</tasks>
+	<primary-key>
+		<!-- 序列默认值主键BILL_ID数据库优先走identity,无需配置;此处验证sequence策略+${tableName}宏 -->
+		<table name="QUICKVO_DEMO_TRADE" strategy="generator" generator="snowflake" />
+		<table name="QUICKVO_DEMO_STAFF_LOG" strategy="sequence" sequence="SEQ_${tableName}" />
+	</primary-key>
+	<cascade>
+		<table name="QUICKVO_DEMO_STAFF_LOG" update-cascade="ENABLED=0" delete="true" load="STATUS=1" orderBy="OPERATE_TIME desc" />
+	</cascade>
+	<type-mapping>
+		<!-- pg向量列映射为float[]原生数组 -->
+		<sql-type table-field="quickvo_demo_type_matrix.col_vector" native-types="vector" java-type="float[]" />
+		<!-- jsonb字段映射List<Float> -->
+		<sql-type table-field="quickvo_demo_type_matrix.col_jsonb" native-types="jsonb" java-type="List&lt;Float&gt;" import-types="java.util.List" />
+	</type-mapping>
+</quickvo>
