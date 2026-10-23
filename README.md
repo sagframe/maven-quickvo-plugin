@@ -18,9 +18,9 @@
 
 sqltoy-orm 官方代码生成插件：依据数据库表结构生成 sqltoy 所需的 entity(POJO) 与 vo(DTO)，支持 20+ 种数据库、主键策略、级联、接口文档注解、类型自定义映射，重复生成不覆盖手工代码。
 
-- 项目地址：<https://gitee.com/sagacity/maven-quickvo-plugin>
-- sqltoy-orm：<https://gitee.com/sagacity/sqltoy>
-- 完整示例工程：<https://gitee.com/sagacity/sqltoy-quickstart>
+- 项目地址：<https://github.com/sagframe/maven-quickvo-plugin>
+- sqltoy-orm：<https://github.com/sagframe/sagacity-sqltoy>
+- 完整示例工程：<https://github.com/sagframe/sqltoy-quickstart>
 
 ## 功能特性
 
@@ -596,7 +596,7 @@ mvn test       # 运行测试
 ## License 与贡献
 
 - 以 **Apache License 2.0** 开源（见 [LICENSE](LICENSE)），可自由用于商业与个人项目
-- 使用问题、缺陷反馈与功能建议：<https://gitee.com/sagacity/maven-quickvo-plugin/issues>
+- 使用问题、缺陷反馈与功能建议：<https://github.com/sagframe/maven-quickvo-plugin/issues>
 - 代码贡献：Fork 后提交 Pull Request，请附带相应测试
 
 ---
@@ -605,9 +605,9 @@ mvn test       # 运行测试
 
 The official code generator for sqltoy-orm: generates entity (POJO) and vo (DTO) classes from database tables. Supports 20+ databases, primary-key strategies, cascading, API-doc annotations and custom type mappings — regeneration never overwrites your hand-written code.
 
-- Project: <https://gitee.com/sagacity/maven-quickvo-plugin>
-- sqltoy-orm: <https://gitee.com/sagacity/sqltoy>
-- Quickstart sample: <https://gitee.com/sagacity/sqltoy-quickstart>
+- Project: <https://github.com/sagframe/maven-quickvo-plugin>
+- sqltoy-orm: <https://github.com/sagframe/sagacity-sqltoy>
+- Quickstart sample: <https://github.com/sagframe/sqltoy-quickstart>
 
 ## Features
 
@@ -1114,5 +1114,5 @@ mvn test       # run tests
 ## License & Contribution
 
 - Licensed under the **Apache License 2.0** (see [LICENSE](LICENSE)); free for commercial and personal use
-- Bugs, questions and feature requests: <https://gitee.com/sagacity/maven-quickvo-plugin/issues>
+- Bugs, questions and feature requests: <https://github.com/sagframe/maven-quickvo-plugin/issues>
 - Code contributions: fork and open a Pull Request, please include the relevant tests
